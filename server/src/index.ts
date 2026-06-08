@@ -22,6 +22,10 @@ app.use('/api/groups', groupsRouter);
 app.use('/api/society', societyRouter);
 app.use('/api/market', marketRouter);
 
+app.get('/', (req, res) => {
+  res.send('Lokaal API Server is running!');
+});
+
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', time: new Date() });
 });
