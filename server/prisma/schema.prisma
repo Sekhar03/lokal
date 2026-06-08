@@ -1,0 +1,384 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  RESIDENT
+  SOCIETY_ADMIN
+  BUSINESS_OWNER
+  GUARD
+  PLATFORM_ADMIN
+}
+
+enum PostType {
+  ANNOUNCEMENT
+  ALERT
+  EVENT_PREVIEW
+  FOR_SALE
+  LOST_FOUND
+  NOTICE
+  SPONSORED
+}
+
+enum Visibility {
+  WARD
+  BLOCK
+  SOCIETY
+}
+
+enum EventCategory {
+  CULTURAL
+  SPORTS
+  CIVIC
+  RELIGIOUS
+  SOCIAL
+}
+
+enum RsvpStatus {
+  GOING
+  MAYBE
+  NOT_GOING
+}
+
+enum DuesStatus {
+  PENDING
+  PAID
+  OVERDUE
+}
+
+enum ComplaintCategory {
+  WATER
+  ELECTRICITY
+  SECURITY
+  PARKING
+  CLEANLINESS
+  LIFT
+  OTHER
+}
+
+enum ComplaintStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+}
+
+enum ListingCategory {
+  ELECTRONICS
+  FURNITURE
+  BOOKS
+  VEHICLES
+  SERVICES
+  CLOTHING
+  OTHER
+}
+
+enum ListingCondition {
+  NEW
+  LIKE_NEW
+  GOOD
+  FAIR
+}
+
+enum ListingStatus {
+  ACTIVE
+  SOLD
+  REMOVED
+}
+
+enum BusinessCategory {
+  GROCERY
+  RESTAURANT
+  MEDICAL
+  SALON
+  HARDWARE
+  SERVICES
+  EDUCATION
+  OTHER
+}
+
+enum PlanTier {
+  FREE
+  PRO
+  FEATURED
+}
+
+enum NotificationType {
+  LIKE
+  COMMENT
+  EVENT_REMINDER
+  DUES_DUE
+  COMPLAINT_UPDATE
+  NEW_MESSAGE
+  ALERT
+  NOTICE
+}
+
+model User {
+  id             String    @id @default(uuid())
+  phone          String    @unique
+  name           String?
+  avatar         String?
+  pinCode        String?
+  flatNumber     String?
+  ward           String?
+  societyId      String?
+  role           Role      @default(RESIDENT)
+  fcmToken       String?
+  preferredLang  String    @default("en")
+  createdAt      DateTime  @default(now())
+
+  society        Society?  @relation(fields: [societyId], references: [id])
+  posts          Post[]
+  comments       Comment[]
+  likes          Like[]
+  stories        Story[]
+  eventsOrganized Event[]
+  rsvps          RSVP[]
+  tickets        Ticket[]
+  dues           Dues[]
+  complaints     Complaint[]
+  listings       Listing[]
+  reviews        Review[]
+  notifications  Notification[]
+  sentMessages     Message[] @relation("SentMessages")
+  receivedMessages Message[] @relation("ReceivedMessages")
+}
+
+model Post {
+  id                 String     @id @default(uuid())
+  authorId           String
+  type               PostType
+  content            String
+  imageUrls          String[]
+  visibility         Visibility @default(WARD)
+  locality           String?
+  wardId             String?
+  isSponsored        Boolean    @default(false)
+  sponsoredExpiresAt DateTime?
+  isPinned           Boolean    @default(false)
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  author             User       @relation(fields: [authorId], references: [id])
+  comments           Comment[]
+  likes              Like[]
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  postId    String
+  authorId  String
+  content   String
+  createdAt DateTime @default(now())
+
+  post      Post     @relation(fields: [postId], references: [id])
+  author    User     @relation(fields: [authorId], references: [id])
+}
+
+model Like {
+  id        String   @id @default(uuid())
+  postId    String
+  userId    String
+  createdAt DateTime @default(now())
+
+  post      Post     @relation(fields: [postId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([postId, userId])
+}
+
+model Story {
+  id        String   @id @default(uuid())
+  authorId  String
+  mediaUrl  String
+  locality  String
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  author    User     @relation(fields: [authorId], references: [id])
+}
+
+model Event {
+  id          String        @id @default(uuid())
+  title       String
+  description String?
+  date        DateTime
+  endDate     DateTime?
+  location    String
+  locationLat Float?
+  locationLng Float?
+  capacity    Int?
+  price       Int           @default(0) // in paise
+  isFree      Boolean       @default(true)
+  organizerId String
+  category    EventCategory
+  imageUrl    String?
+  createdAt   DateTime      @default(now())
+
+  organizer   User          @relation(fields: [organizerId], references: [id])
+  rsvps       RSVP[]
+  tickets     Ticket[]
+}
+
+model RSVP {
+  id        String     @id @default(uuid())
+  eventId   String
+  userId    String
+  status    RsvpStatus
+  createdAt DateTime   @default(now())
+
+  event     Event      @relation(fields: [eventId], references: [id])
+  user      User       @relation(fields: [userId], references: [id])
+
+  @@unique([eventId, userId])
+}
+
+model Ticket {
+  id                String   @id @default(uuid())
+  eventId           String
+  userId            String
+  razorpayOrderId   String?
+  razorpayPaymentId String?
+  qrCode            String?
+  isUsed            Boolean  @default(false)
+  createdAt         DateTime @default(now())
+
+  event             Event    @relation(fields: [eventId], references: [id])
+  user              User     @relation(fields: [userId], references: [id])
+}
+
+model Society {
+  id                String    @id @default(uuid())
+  name              String
+  address           String
+  pinCode           String
+  adminId           String
+  plan              PlanTier  @default(FREE)
+  razorpayAccountId String?
+  createdAt         DateTime  @default(now())
+
+  residents         User[]
+  dues              Dues[]
+  complaints        Complaint[]
+}
+
+model Dues {
+  id                String     @id @default(uuid())
+  societyId         String
+  userId            String
+  amount            Int        // in paise
+  month             String     // YYYY-MM
+  status            DuesStatus @default(PENDING)
+  paidAt            DateTime?
+  razorpayOrderId   String?
+  razorpayPaymentId String?
+  receiptUrl        String?
+
+  society           Society    @relation(fields: [societyId], references: [id])
+  user              User       @relation(fields: [userId], references: [id])
+
+  @@unique([societyId, userId, month])
+}
+
+model Complaint {
+  id          String            @id @default(uuid())
+  societyId   String
+  userId      String
+  category    ComplaintCategory
+  description String
+  imageUrl    String?
+  status      ComplaintStatus   @default(OPEN)
+  resolvedAt  DateTime?
+  adminNote   String?
+  createdAt   DateTime          @default(now())
+
+  society     Society           @relation(fields: [societyId], references: [id])
+  user        User              @relation(fields: [userId], references: [id])
+}
+
+model Listing {
+  id          String           @id @default(uuid())
+  sellerId    String
+  title       String
+  description String
+  price       Int              @default(0) // in paise
+  category    ListingCategory
+  images      String[]
+  condition   ListingCondition
+  status      ListingStatus    @default(ACTIVE)
+  locality    String
+  createdAt   DateTime         @default(now())
+
+  seller      User             @relation(fields: [sellerId], references: [id])
+}
+
+model Message {
+  id         String   @id @default(uuid())
+  listingId  String
+  senderId   String
+  receiverId String
+  content    String
+  isRead     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  sender     User     @relation("SentMessages", fields: [senderId], references: [id])
+  receiver   User     @relation("ReceivedMessages", fields: [receiverId], references: [id])
+}
+
+model Business {
+  id          String           @id @default(uuid())
+  ownerId     String
+  name        String
+  category    BusinessCategory
+  description String?
+  address     String
+  lat         Float?
+  lng         Float?
+  phone       String?
+  upiId       String?
+  websiteUrl  String?
+  imageUrls   String[]
+  rating      Float            @default(0)
+  reviewCount Int              @default(0)
+  isVerified  Boolean          @default(false)
+  isActive    Boolean          @default(true)
+  plan        PlanTier         @default(FREE)
+  locality    String
+  createdAt   DateTime         @default(now())
+
+  reviews     Review[]
+}
+
+model Review {
+  id         String   @id @default(uuid())
+  businessId String
+  userId     String
+  rating     Int
+  text       String?
+  imageUrls  String[]
+  ownerReply String?
+  createdAt  DateTime @default(now())
+
+  business   Business @relation(fields: [businessId], references: [id])
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@unique([businessId, userId])
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  type      NotificationType
+  title     String
+  body      String
+  data      Json?
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  user      User             @relation(fields: [userId], references: [id])
+}
